@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import {
   CandlestickSeries,
   ColorType,
+  CrosshairMode,
   createChart,
   type UTCTimestamp,
 } from "lightweight-charts";
@@ -36,7 +37,7 @@ export default function MarketChart({ symbol, timeframe }: MarketChartProps) {
         timeVisible: true,
         secondsVisible: false,
       },
-      crosshair: { mode: 0 },
+      crosshair: { mode: CrosshairMode.Normal },
     });
 
     const candles = chart.addSeries(CandlestickSeries, {
