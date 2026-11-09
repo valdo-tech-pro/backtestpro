@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
   Activity, BarChart3, Bell, BookOpen, ChevronDown, CircleHelp,
   Clock3, Command, FileText, FlaskConical, LayoutDashboard, LineChart,
@@ -125,10 +126,10 @@ function App() {
   </div>;
 }
 
-function StatCard({title,value,note,icon}:{title:string;value:string;note:string;icon:React.ReactNode}) {
+function StatCard({title,value,note,icon}:{title:string;value:string;note:string;icon:ReactNode}) {
   return <div className="stat-card"><div className="stat-top"><span>{title}</span><div className="stat-icon">{icon}</div></div><div className="stat-value">{value}</div><div className="stat-note">{note}</div></div>;
 }
-function QuickAction({icon,title,desc,onClick}:{icon:React.ReactNode;title:string;desc:string;onClick:()=>void}) {
+function QuickAction({icon,title,desc,onClick}:{icon:ReactNode;title:string;desc:string;onClick:()=>void}) {
   return <button className="quick-action" onClick={onClick}><span className="quick-icon">{icon}</span><span className="quick-copy"><b>{title}</b><small>{desc}</small></span><span className="quick-arrow">→</span></button>;
 }
 function TargetIcon(){return <TrendingUp size={18}/>}
