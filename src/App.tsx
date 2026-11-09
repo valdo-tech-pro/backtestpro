@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import MarketChart from "./components/MarketChart";
 import type { ReactNode } from "react";
 import {
   Activity, BarChart3, Bell, BookOpen, ChevronDown, CircleHelp,
@@ -30,12 +31,7 @@ function App() {
   const [activeNav, setActiveNav] = useState("Dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const bars = useMemo(() => Array.from({ length: 34 }, (_, i) => {
-    const base = 54 + Math.sin(i * 0.58) * 13 + Math.cos(i * 0.21) * 8 + i * 0.38;
-    const open = base + Math.sin(i * 1.7) * 3;
-    const close = base + Math.cos(i * 1.13) * 5;
-    return { open, close, high: Math.max(open, close) + 3 + (i % 3), low: Math.min(open, close) - 3 - (i % 2) };
-  }), []);
+  const [timeframe, setTimeframe] = useState("1H");
 
   const changeMarket = (market: Market) => {
     setActiveMarket(market);
@@ -96,18 +92,9 @@ function App() {
         <section className="content-grid">
           <div className="panel chart-panel">
             <div className="panel-heading"><div><div className="panel-title">Market overview</div><p>Explore a market before starting a replay.</p></div><button className="subtle-button" onClick={() => setActiveNav("Chart Replay")}>Open replay <span>↗</span></button></div>
-            <div className="chart-toolbar"><div className="symbol-select"><span className="symbol-icon">{symbol.startsWith("X") ? "Au" : symbol.startsWith("BTC") ? "₿" : symbol.slice(0,1)}</span><select value={symbol} onChange={e => setSymbol(e.target.value)}>{markets[activeMarket].map(s => <option key={s}>{s}</option>)}</select><ChevronDown size={14}/></div><div className="timeframes"><button className="chosen">1H</button><button>4H</button><button>1D</button><button>1W</button></div><button className="icon-button chart-more"><Settings size={16}/></button></div>
+            <div className="chart-toolbar"><div className="symbol-select"><span className="symbol-icon">{symbol.startsWith("X") ? "Au" : symbol.startsWith("BTC") ? "₿" : symbol.slice(0,1)}</span><select value={symbol} onChange={e => setSymbol(e.target.value)}>{markets[activeMarket].map(s => <option key={s}>{s}</option>)}</select><ChevronDown size={14}/></div><div className="timeframes">{["1H", "4H", "1D", "1W"].map(frame => <button key={frame} className={timeframe === frame ? "chosen" : ""} onClick={() => setTimeframe(frame)}>{frame}</button>)}</div><button className="icon-button chart-more" aria-label="Chart settings"><Settings size={16}/></button></div>
             <div className="chart-legend"><span className="legend-up"/> Bullish <span className="legend-down"/> Bearish <span className="chart-demo-label">Illustrative preview · not live market data</span></div>
-            <div className="candles-chart" role="img" aria-label="Illustrative candlestick chart preview">
-              <div className="chart-grid-lines"><i/><i/><i/><i/><i/></div>
-              <div className="candles">{bars.map((bar, i) => {
-                const up = bar.close >= bar.open;
-                const bottom = Math.min(bar.open, bar.close);
-                const height = Math.max(5, Math.abs(bar.close - bar.open));
-                return <div className="candle-wrap" key={i}><span className={up ? "wick up" : "wick down"} style={{top: (100 - bar.high) + "%", height: (bar.high - bar.low) + "%"}}/><span className={up ? "candle up" : "candle down"} style={{top: (100 - bottom - height) + "%", height: height + "%"}}/></div>;
-              })}</div>
-              <div className="price-labels"><span>1.0940</span><span>1.0910</span><span>1.0880</span><span>1.0850</span><span>1.0820</span></div>
-            </div>
+            <MarketChart symbol={symbol} timeframe={timeframe} />
             <div className="chart-footer"><span>Market data connection coming soon</span><button onClick={() => setActiveNav("Chart Replay")}>Start candle replay <span>→</span></button></div>
           </div>
           <div className="panel quick-panel">
