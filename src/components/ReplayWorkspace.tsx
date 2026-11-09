@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CandlestickSeries, ColorType, createChart, type UTCTimestamp } from "lightweight-charts";
+import { CandlestickSeries, ColorType, createChart, LineStyle, type UTCTimestamp } from "lightweight-charts";
 import { Play, Pause, SkipBack, SkipForward, RotateCcw, TrendingUp, TrendingDown, XCircle } from "lucide-react";
 
 type Side = "BUY" | "SELL";
@@ -72,9 +72,39 @@ export default function ReplayWorkspace() {
       borderDownColor: "#e77f88", wickUpColor: "#36c99a", wickDownColor: "#e77f88",
     });
     series.setData(data.slice(0, cursor));
+    if (position) {
+      series.createPriceLine({
+        price: position.entry,
+        color: "#6c8cff",
+        lineWidth: 2,
+        lineStyle: LineStyle.Solid,
+        axisLabelVisible: true,
+        title: "ENTRY",
+      });
+      if (position.stopLoss !== null) {
+        series.createPriceLine({
+          price: position.stopLoss,
+          color: "#ed8994",
+          lineWidth: 2,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: "SL",
+        });
+      }
+      if (position.takeProfit !== null) {
+        series.createPriceLine({
+          price: position.takeProfit,
+          color: "#59d4aa",
+          lineWidth: 2,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: "TP",
+        });
+      }
+    }
     chart.timeScale().fitContent();
     return () => chart.remove();
-  }, [data, cursor]);
+  }, [data, cursor, position]);
 
   const stepForward = useCallback(() => {
     if (cursor >= data.length) { setPlaying(false); return; }
@@ -152,7 +182,14 @@ export default function ReplayWorkspace() {
         <label>Timeframe<select value={timeframe} onChange={e => { setTimeframe(e.target.value); reset(); }}><option>1H</option><option>4H</option><option>1D</option></select></label>
         <label>Speed<select value={speed} onChange={e => setSpeed(e.target.value)}><option>1x</option><option>2x</option><option>4x</option></select></label>
       </div>
-      <div className="replay-chart" ref={containerRef} />
+      <div className="replay-chart-wrap">
+        {position && <div className="chart-level-legend" aria-label="Open trade chart levels">
+          <span><i className="entry-level-dot" /> Entry {formatPrice(position.entry, symbol)}</span>
+          {position.stopLoss !== null && <span><i className="sl-level-dot" /> Stop Loss {formatPrice(position.stopLoss, symbol)}</span>}
+          {position.takeProfit !== null && <span><i className="tp-level-dot" /> Take Profit {formatPrice(position.takeProfit, symbol)}</span>}
+        </div>}
+        <div className="replay-chart" ref={containerRef} />
+      </div>
       <div className="replay-progress"><span>Replay progress</span><b>{cursor} / {data.length} candles</b></div>
       <div className="replay-track"><div style={{ width: `${(cursor / data.length) * 100}%` }} /></div>
       <div className="replay-controls">
