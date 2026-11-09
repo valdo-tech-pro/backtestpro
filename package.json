@@ -17,5 +17,8 @@
     "lucide-react": "latest",
     "lightweight-charts": "^5.0.0"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@types/react": "latest",
+    "@types/react-dom": "latest"
+  }
 }
