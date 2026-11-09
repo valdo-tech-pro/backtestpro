@@ -2,8 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CandlestickSeries, ColorType, createChart, type UTCTimestamp } from "lightweight-charts";
 import { Play, Pause, SkipBack, SkipForward, RotateCcw } from "lucide-react";
 
-type Candle = { time: UTCTimestamp; open: number; high: number; low: number; close: number };
-
 export default function ReplayWorkspace() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [cursor, setCursor] = useState(25);
