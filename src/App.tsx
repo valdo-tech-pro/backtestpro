@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import {
   Activity, BarChart3, Bell, BookOpen, ChevronDown, CircleHelp,
   Clock3, Command, FileText, FlaskConical, LayoutDashboard, LineChart,
-  Menu, Plus, Search, Settings, ShieldCheck, Sparkles, TrendingDown,
+  Menu, Plus, Search, Settings, ShieldCheck, Sparkles,
   TrendingUp, Wallet, X
 } from "lucide-react";
 
