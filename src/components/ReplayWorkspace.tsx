@@ -1,6 +1,31 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CandlestickSeries, ColorType, createChart, type UTCTimestamp } from "lightweight-charts";
-import { Play, Pause, SkipBack, SkipForward, RotateCcw } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, RotateCcw, TrendingUp, TrendingDown, XCircle } from "lucide-react";
+
+type Side = "BUY" | "SELL";
+type Trade = {
+  id: number;
+  side: Side;
+  entry: number;
+  exit: number;
+  units: number;
+  pnl: number;
+  entryIndex: number;
+  exitIndex: number;
+  reason: "Stop Loss" | "Take Profit" | "Manual close";
+};
+type OpenTrade = {
+  side: Side;
+  entry: number;
+  units: number;
+  stopLoss: number | null;
+  takeProfit: number | null;
+  entryIndex: number;
+};
+
+const formatPrice = (value: number, symbol: string) =>
+  value.toLocaleString(undefined, { minimumFractionDigits: symbol.includes("JPY") ? 3 : 2, maximumFractionDigits: symbol.includes("JPY") ? 3 : 5 });
+const formatMoney = (value: number) => `${value < 0 ? "-" : value > 0 ? "+" : ""}$${Math.abs(value).toFixed(2)}`;
 
 export default function ReplayWorkspace() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -9,6 +34,12 @@ export default function ReplayWorkspace() {
   const [speed, setSpeed] = useState("1x");
   const [symbol, setSymbol] = useState("EUR/USD");
   const [timeframe, setTimeframe] = useState("1H");
+  const [units, setUnits] = useState("1000");
+  const [stopLoss, setStopLoss] = useState("");
+  const [takeProfit, setTakeProfit] = useState("");
+  const [position, setPosition] = useState<OpenTrade | null>(null);
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [tradeMessage, setTradeMessage] = useState("");
 
   const data = useMemo(() => {
     const seed = symbol.split("").reduce((sum, c) => sum + c.charCodeAt(0), 0);
@@ -45,19 +76,74 @@ export default function ReplayWorkspace() {
     return () => chart.remove();
   }, [data, cursor]);
 
+  const stepForward = useCallback(() => {
+    if (cursor >= data.length) { setPlaying(false); return; }
+    const candle = data[cursor];
+    if (position) {
+      const stopHit = position.stopLoss !== null && (position.side === "BUY" ? candle.low <= position.stopLoss : candle.high >= position.stopLoss);
+      const targetHit = position.takeProfit !== null && (position.side === "BUY" ? candle.high >= position.takeProfit : candle.low <= position.takeProfit);
+      // If both levels fall inside one candle, assume the stop was hit first (conservative).
+      if (stopHit || targetHit) {
+        const exit = stopHit ? position.stopLoss as number : position.takeProfit as number;
+        const direction = position.side === "BUY" ? 1 : -1;
+        setTrades(previous => [...previous, {
+          id: Date.now(), side: position.side, entry: position.entry, exit, units: position.units,
+          pnl: (exit - position.entry) * direction * position.units,
+          entryIndex: position.entryIndex, exitIndex: cursor + 1,
+          reason: stopHit ? "Stop Loss" : "Take Profit",
+        }]);
+        setPosition(null);
+        setTradeMessage(`${stopHit ? "Stop Loss" : "Take Profit"} reached. Trade closed.`);
+      }
+    }
+    setCursor(current => Math.min(data.length, current + 1));
+  }, [cursor, data, position]);
+
   useEffect(() => {
     if (!playing) return;
     const delay = speed === "2x" ? 500 : speed === "4x" ? 250 : 1000;
-    const timer = window.setInterval(() => {
-      setCursor(current => {
-        if (current >= data.length) { setPlaying(false); return data.length; }
-        return current + 1;
-      });
-    }, delay);
+    const timer = window.setInterval(stepForward, delay);
     return () => window.clearInterval(timer);
-  }, [playing, speed, data.length]);
+  }, [playing, speed, stepForward]);
 
-  const reset = () => { setPlaying(false); setCursor(25); };
+  const reset = () => {
+    setPlaying(false); setCursor(25); setPosition(null); setTrades([]);
+    setTradeMessage("Replay reset. Your practice trade history was cleared.");
+  };
+
+  const openTrade = (side: Side) => {
+    if (position) { setTradeMessage("Close your open trade before opening another."); return; }
+    const amount = Number(units);
+    if (!Number.isFinite(amount) || amount <= 0) { setTradeMessage("Enter a valid position size greater than zero."); return; }
+    const entry = data[Math.max(0, cursor - 1)].close;
+    const sl = stopLoss.trim() === "" ? null : Number(stopLoss);
+    const tp = takeProfit.trim() === "" ? null : Number(takeProfit);
+    if ((sl !== null && (!Number.isFinite(sl) || (side === "BUY" ? sl >= entry : sl <= entry))) ||
+        (tp !== null && (!Number.isFinite(tp) || (side === "BUY" ? tp <= entry : tp >= entry)))) {
+      setTradeMessage(side === "BUY" ? "For a BUY, Stop Loss must be below entry and Take Profit above entry." : "For a SELL, Stop Loss must be above entry and Take Profit below entry.");
+      return;
+    }
+    setPosition({ side, entry, units: amount, stopLoss: sl, takeProfit: tp, entryIndex: cursor });
+    setTradeMessage(`${side} opened at ${formatPrice(entry, symbol)}.`);
+    setPlaying(false);
+  };
+
+  const closeTrade = () => {
+    if (!position) return;
+    const exit = data[Math.max(0, cursor - 1)].close;
+    const direction = position.side === "BUY" ? 1 : -1;
+    setTrades(previous => [...previous, {
+      id: Date.now(), side: position.side, entry: position.entry, exit, units: position.units,
+      pnl: (exit - position.entry) * direction * position.units,
+      entryIndex: position.entryIndex, exitIndex: cursor, reason: "Manual close",
+    }]);
+    setPosition(null);
+    setTradeMessage(`Trade closed at ${formatPrice(exit, symbol)}.`);
+  };
+
+  const totalPnl = trades.reduce((sum, trade) => sum + trade.pnl, 0);
+  const unrealizedPnl = position ? (data[Math.max(0, cursor - 1)].close - position.entry) * (position.side === "BUY" ? 1 : -1) * position.units : 0;
+
   return <section className="replay-workspace">
     <div className="replay-heading"><div><div className="eyebrow">PRACTICE MODE</div><h2>Manual Chart Replay</h2><p>Step through candles, practise decisions, and track your process.</p></div><span className="sample-badge">SAMPLE DATA</span></div>
     <div className="panel replay-panel">
@@ -71,10 +157,31 @@ export default function ReplayWorkspace() {
       <div className="replay-track"><div style={{ width: `${(cursor / data.length) * 100}%` }} /></div>
       <div className="replay-controls">
         <button onClick={reset}><RotateCcw size={16}/> Reset</button>
-        <div><button aria-label="Back one candle" onClick={() => { setPlaying(false); setCursor(c => Math.max(1, c - 1)); }}><SkipBack size={17}/></button><button className="replay-play" onClick={() => cursor >= data.length ? reset() : setPlaying(p => !p)}>{playing ? <Pause size={17}/> : <Play size={17}/>} {playing ? "Pause" : "Play"}</button><button aria-label="Forward one candle" onClick={() => { setPlaying(false); setCursor(c => Math.min(data.length, c + 1)); }}><SkipForward size={17}/></button></div>
+        <div><button aria-label="Back one candle" onClick={() => { setPlaying(false); setCursor(c => Math.max(1, c - 1)); }}><SkipBack size={17}/></button><button className="replay-play" onClick={() => cursor >= data.length ? reset() : setPlaying(p => !p)}>{playing ? <Pause size={17}/> : <Play size={17}/>} {playing ? "Pause" : "Play"}</button><button aria-label="Forward one candle" onClick={() => { setPlaying(false); stepForward(); }}><SkipForward size={17}/></button></div>
         <span className="replay-note">Illustrative candles · not historical market data</span>
       </div>
     </div>
-    <div className="replay-disclaimer">This is an early replay prototype. The candles are generated sample data; real historical data, trade entry, stop-loss, take-profit, and session saving are not connected yet.</div>
+
+    <section className="panel trade-panel">
+      <div className="trade-panel-heading"><div><div className="panel-title">Trade execution</div><p>Place simulated practice trades on the replay chart.</p></div><span className="practice-tag">PAPER TRADING</span></div>
+      <div className="trade-form">
+        <label>Position size (units)<input type="number" min="1" step="1" value={units} onChange={e => setUnits(e.target.value)} /></label>
+        <label>Stop Loss (price)<input type="number" step="any" placeholder="Optional" value={stopLoss} onChange={e => setStopLoss(e.target.value)} /></label>
+        <label>Take Profit (price)<input type="number" step="any" placeholder="Optional" value={takeProfit} onChange={e => setTakeProfit(e.target.value)} /></label>
+      </div>
+      <div className="trade-actions">
+        <button className="buy-button" disabled={!!position || cursor === 0} onClick={() => openTrade("BUY")}><TrendingUp size={16}/> Buy</button>
+        <button className="sell-button" disabled={!!position || cursor === 0} onClick={() => openTrade("SELL")}><TrendingDown size={16}/> Sell</button>
+        <button className="close-trade-button" disabled={!position} onClick={closeTrade}><XCircle size={16}/> Close trade</button>
+      </div>
+      {tradeMessage && <p className="trade-message" role="status">{tradeMessage}</p>}
+      {position ? <div className="open-position">
+        <div className="position-top"><b className={position.side === "BUY" ? "positive" : "negative"}>{position.side} {symbol}</b><span>OPEN · Entry {formatPrice(position.entry, symbol)}</span></div>
+        <div className="position-metrics"><span>Unrealized P&amp;L <b className={unrealizedPnl >= 0 ? "positive" : "negative"}>{formatMoney(unrealizedPnl)}</b></span><span>Stop Loss <b>{position.stopLoss === null ? "—" : formatPrice(position.stopLoss, symbol)}</b></span><span>Take Profit <b>{position.takeProfit === null ? "—" : formatPrice(position.takeProfit, symbol)}</b></span></div>
+      </div> : <div className="no-position">No open practice trade. Choose Buy or Sell to start.</div>}
+      <div className="trade-summary"><div><span>Closed trades</span><b>{trades.length}</b></div><div><span>Realized P&amp;L</span><b className={totalPnl >= 0 ? "positive" : "negative"}>{formatMoney(totalPnl)}</b></div><div><span>Win rate</span><b>{trades.length ? `${(trades.filter(t => t.pnl > 0).length / trades.length * 100).toFixed(1)}%` : "—"}</b></div></div>
+      {trades.length > 0 && <div className="trade-history"><b>Trade history</b>{[...trades].reverse().map(trade => <div className="trade-history-row" key={trade.id}><span className={trade.side === "BUY" ? "positive" : "negative"}>{trade.side}</span><span>{formatPrice(trade.entry, symbol)} → {formatPrice(trade.exit, symbol)}</span><span>{trade.reason}</span><b className={trade.pnl >= 0 ? "positive" : "negative"}>{formatMoney(trade.pnl)}</b></div>)}</div>}
+    </section>
+    <div className="replay-disclaimer">Practice simulation only. All candles are generated sample data, not real historical prices. Trades are not sent to a broker. P&amp;L is a simplified price-difference calculation in quote-currency units; spreads, commissions, swaps, margin, and slippage are not included. If both Stop Loss and Take Profit are touched within one candle, the simulation assumes Stop Loss was hit first.</div>
   </section>;
 }
