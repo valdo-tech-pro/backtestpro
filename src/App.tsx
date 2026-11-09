@@ -1,5 +1,6 @@
 import { useState } from "react";
 import MarketChart from "./components/MarketChart";
+import ReplayWorkspace from "./components/ReplayWorkspace";
 import type { ReactNode } from "react";
 import {
   Activity, BarChart3, Bell, BookOpen, ChevronDown, CircleHelp,
@@ -79,7 +80,7 @@ function App() {
         <div className="topbar-left"><button className="icon-button mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Open menu"><Menu size={20} /></button><div className="breadcrumb">Workspace <span>/</span> <b>{activeNav}</b></div></div>
         <div className="top-actions"><div className="search-box"><Search size={15} /><span>Search anything...</span><kbd><Command size={11} /> K</kbd></div><button className="icon-button notification" aria-label="Notifications"><Bell size={18} /><i /></button><div className="top-avatar">VN</div></div>
       </header>
-      <div className="page-content">
+      <div className="page-content">{activeNav === "Chart Replay" ? <ReplayWorkspace /> : <>
         <div className="welcome-row"><div><div className="eyebrow"><span className="live-dot" /> YOUR TRADING WORKSPACE</div><h1>{activeNav === "Dashboard" ? "Good to see you, trader." : activeNav}</h1><p className="subtitle">{activeNav === "Dashboard" ? "Your research starts here. Build, test, and refine your trading edge." : "This workspace is being prepared. Your tools will appear here as we build them."}</p></div><button className="primary-button" onClick={() => setActiveNav("Chart Replay")}><Plus size={17} /> New backtest</button></div>
 
         <section className="stats-grid">
@@ -108,6 +109,7 @@ function App() {
 
         <section className="panel sessions-panel"><div className="panel-heading"><div><div className="panel-title">Recent sessions</div><p>Your latest backtesting activity will appear here.</p></div><button className="text-button" onClick={() => setActiveNav("Trading Journal")}>View journal <span>→</span></button></div><div className="empty-state"><div className="empty-icon"><FileText size={22}/></div><b>No sessions yet</b><p>Your first backtest is one click away. Start with a market replay and record your decisions.</p><button className="outline-button" onClick={() => setActiveNav("Chart Replay")}><Plus size={15}/> Start your first session</button></div></section>
         <footer><span>© 2026 BacktestPro</span><span><span className="footer-status"/> All systems in preview mode</span><span>Built for better trading decisions.</span></footer>
+      </>}
       </div>
     </main>
   </div>;
