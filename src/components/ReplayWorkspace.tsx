@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CandlestickSeries, ColorType, createChart, LineStyle, type UTCTimestamp } from "lightweight-charts";
-import { Play, Pause, SkipBack, SkipForward, RotateCcw, TrendingUp, TrendingDown, XCircle } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, RotateCcw, TrendingUp, TrendingDown, XCircle, Calculator } from "lucide-react";
 
 type Side = "BUY" | "SELL";
 type Trade = {
@@ -35,6 +35,7 @@ export default function ReplayWorkspace() {
   const [symbol, setSymbol] = useState("EUR/USD");
   const [timeframe, setTimeframe] = useState("1H");
   const [units, setUnits] = useState("1000");
+  const [plannedSide, setPlannedSide] = useState<Side>("BUY");
   const [stopLoss, setStopLoss] = useState("");
   const [takeProfit, setTakeProfit] = useState("");
   const [position, setPosition] = useState<OpenTrade | null>(null);
@@ -172,6 +173,20 @@ export default function ReplayWorkspace() {
   };
 
   const totalPnl = trades.reduce((sum, trade) => sum + trade.pnl, 0);
+  const calculationEntry = position ? position.entry : data[Math.max(0, cursor - 1)].close;
+  const calculationSide = position ? position.side : plannedSide;
+  const calculationUnits = position ? position.units : Number(units);
+  const calculationStop = position ? position.stopLoss : (stopLoss.trim() === "" ? null : Number(stopLoss));
+  const calculationTarget = position ? position.takeProfit : (takeProfit.trim() === "" ? null : Number(takeProfit));
+  const validStop = calculationStop !== null && Number.isFinite(calculationStop) &&
+    (calculationSide === "BUY" ? calculationStop < calculationEntry : calculationStop > calculationEntry);
+  const validTarget = calculationTarget !== null && Number.isFinite(calculationTarget) &&
+    (calculationSide === "BUY" ? calculationTarget > calculationEntry : calculationTarget < calculationEntry);
+  const validUnits = Number.isFinite(calculationUnits) && calculationUnits > 0;
+  const estimatedRisk = validStop && validUnits ? Math.abs(calculationEntry - calculationStop) * calculationUnits : null;
+  const estimatedReward = validTarget && validUnits ? Math.abs(calculationTarget - calculationEntry) * calculationUnits : null;
+  const riskRewardRatio = estimatedRisk !== null && estimatedRisk > 0 && estimatedReward !== null
+    ? estimatedReward / estimatedRisk : null;
   const unrealizedPnl = position ? (data[Math.max(0, cursor - 1)].close - position.entry) * (position.side === "BUY" ? 1 : -1) * position.units : 0;
 
   return <section className="replay-workspace">
@@ -205,6 +220,21 @@ export default function ReplayWorkspace() {
         <label>Position size (units)<input type="number" min="1" step="1" value={units} onChange={e => setUnits(e.target.value)} /></label>
         <label>Stop Loss (price)<input type="number" step="any" placeholder="Optional" value={stopLoss} onChange={e => setStopLoss(e.target.value)} /></label>
         <label>Take Profit (price)<input type="number" step="any" placeholder="Optional" value={takeProfit} onChange={e => setTakeProfit(e.target.value)} /></label>
+      </div>
+      <div className="risk-calculator">
+        <div className="risk-calculator-heading"><div><Calculator size={16}/><b>Risk / Reward Calculator</b></div><span>ESTIMATES</span></div>
+        {!position && <label className="risk-side-select">Calculation direction
+          <select value={plannedSide} onChange={e => setPlannedSide(e.target.value as Side)}>
+            <option value="BUY">BUY</option><option value="SELL">SELL</option>
+          </select>
+        </label>}
+        <div className="risk-calculator-grid">
+          <div><span>Reference entry</span><b>{formatPrice(calculationEntry, symbol)}</b></div>
+          <div><span>Potential loss</span><b className="negative">{estimatedRisk === null ? "Set a valid Stop Loss" : formatMoney(-estimatedRisk)}</b></div>
+          <div><span>Potential profit</span><b className="positive">{estimatedReward === null ? "Set a valid Take Profit" : formatMoney(estimatedReward)}</b></div>
+          <div><span>Risk / Reward</span><b>{riskRewardRatio === null ? "—" : `1 : ${riskRewardRatio.toFixed(2)}`}</b></div>
+        </div>
+        <p>Uses entry price, position size, Stop Loss and Take Profit. Simplified estimate; excludes trading costs and contract specifications.</p>
       </div>
       <div className="trade-actions">
         <button className="buy-button" disabled={!!position || cursor === 0} onClick={() => openTrade("BUY")}><TrendingUp size={16}/> Buy</button>
