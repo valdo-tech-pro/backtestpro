@@ -26,3 +26,6 @@
 .apply-size-button{margin-top:10px;border:1px solid #4965ad;background:#1b2d50;color:#bfd0ff;border-radius:6px;padding:8px 11px;font-size:10px;font-weight:600}
 .apply-size-button:hover{background:#263e6b}
 @media(max-width:700px){.trade-form{grid-template-columns:1fr 1fr}.risk-calculator-grid{grid-template-columns:1fr 1fr}}
+
+.historical-badge{color:#72dfbc;border-color:#286b54;background:#15332e}
+.data-status{font-size:9px;line-height:1.5;color:#a9bcff;margin:0 0 8px}
