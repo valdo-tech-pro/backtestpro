@@ -233,7 +233,7 @@ export default function ReplayWorkspace() {
     <div className="panel replay-panel">
       <div className="replay-toolbar">
         <label>Market<select value={symbol} onChange={e => { setSymbol(e.target.value); reset(); }}><option>EUR/USD</option><option>GBP/USD</option><option>USD/JPY</option><option>XAU/USD</option><option>BTC/USDT</option><option>ETH/USDT</option><option>SOL/USDT</option></select></label>
-        <label>Timeframe<select value={timeframe} onChange={e => { setTimeframe(e.target.value); reset(); }}><option>1M</option><option>5M</option><option>15M</option><option>30M</option><option>1H</option><option>4H</option><option>1D</option></select></label>
+        <label>Timeframe<select value={timeframe} onChange={e => { setTimeframe(e.target.value); reset(); }}><option>1m</option><option>5m</option><option>15m</option><option>30m</option><option>1H</option><option>4H</option><option>1D</option></select></label>
         <label>Speed<select value={speed} onChange={e => setSpeed(e.target.value)}><option>1x</option><option>2x</option><option>4x</option></select></label>
       </div>
       <div className="replay-chart-wrap">
