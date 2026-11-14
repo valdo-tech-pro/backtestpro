@@ -256,7 +256,6 @@ export default function ReplayWorkspace() {
           <div><span>Risk / Reward</span><b>{riskRewardRatio === null ? "—" : `1 : ${riskRewardRatio.toFixed(2)}`}</b></div>
           <div><span>Risk budget</span><b>{riskBudget === null ? "Enter valid balance / risk" : `${riskBudget.toFixed(2)} ${quoteCurrency(symbol)}`}</b></div>
           <div><span>Suggested position size</span><b>{suggestedUnits === null ? "Set valid Stop Loss" : `${suggestedUnits.toFixed(4)} units`}</b></div></div>
-        </div>
         <p>Price difference × units × contract multiplier. Estimates are in {quoteCurrency(symbol)} and assume your account balance is in that same currency. Set the multiplier to match your broker's contract specification; no automatic FX conversion, spreads, commissions, swaps or slippage are included.</p>
         {suggestedUnits !== null && <button className="apply-size-button" onClick={() => setUnits(String(Number(suggestedUnits.toFixed(6))))}>Use suggested position size</button>}
       </div>
