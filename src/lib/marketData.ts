@@ -148,7 +148,7 @@ export async function fetchBinanceCandles(
 
 /** Parse a user-supplied OHLC CSV. Expected headers: timestamp/time/date, open, high, low, close. */
 export function parseImportedCandles(csvText: string): ReplayCandle[] {
-  const lines = csvText.replace(/^\\uFEFF/, "").split(/\\r?\\n/).map(line => line.trim()).filter(Boolean);
+  const lines = csvText.replace(/^\uFEFF/, "").split(/\r?\n/).map(line => line.trim()).filter(Boolean);
   if (lines.length < 3) throw new Error("The CSV must contain a header and at least two candle rows.");
   const splitRow = (line: string) => {
     const cells: string[] = []; let cell = ""; let quoted = false;
