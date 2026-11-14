@@ -73,13 +73,23 @@ export async function fetchBinanceCandles(
   symbol: string,
   timeframe: string,
   signal?: AbortSignal,
+  dateRange?: { from: string; to: string },
 ): Promise<ReplayCandle[]> {
   const pair = BINANCE_SYMBOLS[symbol];
   const customMonths: Record<string, number> = { "3M": 3, "6M": 6, "1Y": 12 };
   const interval = customMonths[timeframe] ? "1M" : BINANCE_INTERVALS[timeframe];
   if (!pair || !interval) throw new Error("This market is not supported by the Binance data adapter.");
 
-  const query = new URLSearchParams({ symbol: pair, interval, limit: "500" });
+  const query = new URLSearchParams({ symbol: pair, interval, limit: dateRange ? "1000" : "500" });
+  if (dateRange) {
+    const startTime = new Date(`${dateRange.from}T00:00:00.000Z`).getTime();
+    const endTime = new Date(`${dateRange.to}T23:59:59.999Z`).getTime();
+    if (!Number.isFinite(startTime) || !Number.isFinite(endTime) || startTime > endTime) {
+      throw new Error("Choose a valid date range where the start date is not after the end date.");
+    }
+    query.set("startTime", String(startTime));
+    query.set("endTime", String(endTime));
+  }
   const response = await fetch(`https://api.binance.com/api/v3/klines?${query.toString()}`, {
     signal,
     headers: { Accept: "application/json" },
