@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createSampleCandles, fetchBinanceCandles, type ReplayCandle } from "../lib/marketData";
 import { CandlestickSeries, ColorType, createChart, LineStyle, type UTCTimestamp } from "lightweight-charts";
 import { Play, Pause, SkipBack, SkipForward, RotateCcw, TrendingUp, TrendingDown, XCircle, Calculator } from "lucide-react";
 
@@ -49,20 +50,40 @@ export default function ReplayWorkspace() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [tradeMessage, setTradeMessage] = useState("");
 
-  const data = useMemo(() => {
-    const seed = symbol.split("").reduce((sum, c) => sum + c.charCodeAt(0), 0);
-    const step = timeframe === "4H" ? 14400 : timeframe === "1D" ? 86400 : 3600;
-    const base = symbol.includes("JPY") ? 150 : symbol.includes("XAU") ? 2300 : symbol.includes("BTC") ? 65000 : 1.085;
-    let previous = base;
-    const start = Math.floor(Date.now() / 1000) - 120 * step;
-    return Array.from({ length: 120 }, (_, i) => {
-      const open = previous;
-      const close = Math.max(0.00001, open + Math.sin((i + seed) * 0.53) * base * 0.0012 + Math.cos((i + seed) * 0.17) * base * 0.0004);
-      const high = Math.max(open, close) + Math.abs(Math.sin(i * 1.4 + seed)) * base * 0.0007;
-      const low = Math.max(0.000001, Math.min(open, close) - Math.abs(Math.cos(i * 1.2 + seed)) * base * 0.0007);
-      previous = close;
-      return { time: (start + i * step) as UTCTimestamp, open, high, low, close };
-    });
+  const [data, setData] = useState<ReplayCandle[]>(() => createSampleCandles(symbol, timeframe));
+  const [dataSource, setDataSource] = useState("SAMPLE DATA");
+  const [dataLoading, setDataLoading] = useState(false);
+  const [dataMessage, setDataMessage] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const sample = createSampleCandles(symbol, timeframe);
+    setData(sample);
+    setDataSource("SAMPLE DATA");
+    setDataMessage("");
+    if (symbol !== "BTC/USDT" && symbol !== "ETH/USDT" && symbol !== "SOL/USDT") {
+      setDataLoading(false);
+      return () => controller.abort();
+    }
+    setDataLoading(true);
+    setDataMessage("Loading recent historical candles from Binance…");
+    fetchBinanceCandles(symbol, timeframe, controller.signal)
+      .then(candles => {
+        if (controller.signal.aborted) return;
+        setData(candles);
+        setDataSource("BINANCE HISTORICAL");
+        setDataMessage(`Loaded ${candles.length} historical candles from Binance public spot data.`);
+        setCursor(25);
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setDataSource("SAMPLE FALLBACK");
+        setDataMessage("Historical data could not be loaded. Showing clearly labelled sample candles instead.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setDataLoading(false);
+      });
+    return () => controller.abort();
   }, [symbol, timeframe]);
 
   useEffect(() => {
@@ -208,10 +229,10 @@ export default function ReplayWorkspace() {
   const unrealizedPnl = position ? (data[Math.max(0, cursor - 1)].close - position.entry) * (position.side === "BUY" ? 1 : -1) * position.units * position.multiplier : 0;
 
   return <section className="replay-workspace">
-    <div className="replay-heading"><div><div className="eyebrow">PRACTICE MODE</div><h2>Manual Chart Replay</h2><p>Step through candles, practise decisions, and track your process.</p></div><span className="sample-badge">SAMPLE DATA</span></div>
+    <div className="replay-heading"><div><div className="eyebrow">PRACTICE MODE</div><h2>Manual Chart Replay</h2><p>Step through candles, practise decisions, and track your process.</p></div><span className={dataSource === "BINANCE HISTORICAL" ? "sample-badge historical-badge" : "sample-badge"}>{dataLoading ? "LOADING DATA" : dataSource}</span></div>
     <div className="panel replay-panel">
       <div className="replay-toolbar">
-        <label>Market<select value={symbol} onChange={e => { setSymbol(e.target.value); reset(); }}><option>EUR/USD</option><option>GBP/USD</option><option>USD/JPY</option><option>XAU/USD</option><option>BTC/USDT</option></select></label>
+        <label>Market<select value={symbol} onChange={e => { setSymbol(e.target.value); reset(); }}><option>EUR/USD</option><option>GBP/USD</option><option>USD/JPY</option><option>XAU/USD</option><option>BTC/USDT</option><option>ETH/USDT</option><option>SOL/USDT</option></select></label>
         <label>Timeframe<select value={timeframe} onChange={e => { setTimeframe(e.target.value); reset(); }}><option>1H</option><option>4H</option><option>1D</option></select></label>
         <label>Speed<select value={speed} onChange={e => setSpeed(e.target.value)}><option>1x</option><option>2x</option><option>4x</option></select></label>
       </div>
@@ -223,12 +244,12 @@ export default function ReplayWorkspace() {
         </div>}
         <div className="replay-chart" ref={containerRef} />
       </div>
-      <div className="replay-progress"><span>Replay progress</span><b>{cursor} / {data.length} candles</b></div>
+      <div className="replay-progress"><span>Replay progress</span><b>{cursor} / {data.length} candles</b></div>{dataMessage && <p className="data-status" role="status">{dataMessage}</p>}
       <div className="replay-track"><div style={{ width: `${(cursor / data.length) * 100}%` }} /></div>
       <div className="replay-controls">
         <button onClick={reset}><RotateCcw size={16}/> Reset</button>
         <div><button aria-label="Back one candle" onClick={() => { setPlaying(false); setCursor(c => Math.max(1, c - 1)); }}><SkipBack size={17}/></button><button className="replay-play" onClick={() => cursor >= data.length ? reset() : setPlaying(p => !p)}>{playing ? <Pause size={17}/> : <Play size={17}/>} {playing ? "Pause" : "Play"}</button><button aria-label="Forward one candle" onClick={() => { setPlaying(false); stepForward(); }}><SkipForward size={17}/></button></div>
-        <span className="replay-note">Illustrative candles · not historical market data</span>
+        <span className="replay-note">{dataSource === "BINANCE HISTORICAL" ? "Historical candles · Binance public spot" : "Sample candles · not historical market data"}</span>
       </div>
     </div>
 
@@ -260,7 +281,7 @@ export default function ReplayWorkspace() {
         {suggestedUnits !== null && <button className="apply-size-button" onClick={() => setUnits(String(Number(suggestedUnits.toFixed(6))))}>Use suggested position size</button>}
       </div>
       <div className="trade-actions">
-        <button className="buy-button" disabled={!!position || cursor === 0} onClick={() => openTrade("BUY")}><TrendingUp size={16}/> Buy</button>
+        <button className="buy-button" disabled={!!position || cursor === 0 || dataLoading} onClick={() => openTrade("BUY")}><TrendingUp size={16}/> Buy</button>
         <button className="sell-button" disabled={!!position || cursor === 0} onClick={() => openTrade("SELL")}><TrendingDown size={16}/> Sell</button>
         <button className="close-trade-button" disabled={!position} onClick={closeTrade}><XCircle size={16}/> Close trade</button>
       </div>
@@ -272,6 +293,6 @@ export default function ReplayWorkspace() {
       <div className="trade-summary"><div><span>Closed trades</span><b>{trades.length}</b></div><div><span>Realized P&amp;L</span><b className={totalPnl >= 0 ? "positive" : "negative"}>{formatMoney(totalPnl, quoteCurrency(symbol))}</b></div><div><span>Win rate</span><b>{trades.length ? `${(trades.filter(t => t.pnl > 0).length / trades.length * 100).toFixed(1)}%` : "—"}</b></div></div>
       {trades.length > 0 && <div className="trade-history"><b>Trade history</b>{[...trades].reverse().map(trade => <div className="trade-history-row" key={trade.id}><span className={trade.side === "BUY" ? "positive" : "negative"}>{trade.side}</span><span>{formatPrice(trade.entry, symbol)} → {formatPrice(trade.exit, symbol)}</span><span>{trade.reason}</span><b className={trade.pnl >= 0 ? "positive" : "negative"}>{formatMoney(trade.pnl, quoteCurrency(symbol))}</b></div>)}</div>}
     </section>
-    <div className="replay-disclaimer">Practice simulation only. All candles are generated sample data, not real historical prices. Trades are not sent to a broker. P&amp;L is price difference × units × the configured contract multiplier, shown in the instrument's quote currency. The multiplier must match the broker's specification. Automatic account-currency conversion, spreads, commissions, swaps, margin, and slippage are not modeled. If both Stop Loss and Take Profit are touched within one candle, the simulation assumes Stop Loss was hit first.</div>
+    <div className="replay-disclaimer">Practice simulation only. When Binance historical data is available, candles are real Binance spot OHLC data; otherwise the replay clearly falls back to generated sample candles. Trades are not sent to a broker. P&amp;L is price difference × units × the configured contract multiplier, shown in the instrument's quote currency. The multiplier must match the broker's specification. Automatic account-currency conversion, spreads, commissions, swaps, margin, and slippage are not modeled. If both Stop Loss and Take Profit are touched within one candle, the simulation assumes Stop Loss was hit first.</div>
   </section>;
 }
