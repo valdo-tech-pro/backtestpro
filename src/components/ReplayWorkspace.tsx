@@ -54,6 +54,9 @@ export default function ReplayWorkspace() {
   const [dataSource, setDataSource] = useState("SAMPLE DATA");
   const [dataLoading, setDataLoading] = useState(false);
   const [dataMessage, setDataMessage] = useState("");
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+  const [appliedRange, setAppliedRange] = useState<{ from: string; to: string } | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -67,13 +70,15 @@ export default function ReplayWorkspace() {
     }
     setDataLoading(true);
     setDataMessage("Loading recent historical candles from Binance…");
-    fetchBinanceCandles(symbol, timeframe, controller.signal)
+    fetchBinanceCandles(symbol, timeframe, controller.signal, appliedRange ?? undefined)
       .then(candles => {
         if (controller.signal.aborted) return;
         setData(candles);
         setDataSource("BINANCE HISTORICAL");
-        setDataMessage(`Loaded ${candles.length} historical candles from Binance public spot data.`);
-        setCursor(25);
+        const rangeLabel = appliedRange ? ` for ${appliedRange.from} to ${appliedRange.to}` : "";
+        const limitNote = appliedRange && candles.length === 1000 ? " Binance returned the 1,000-candle request limit; narrow the date range for a more complete view." : "";
+        setDataMessage(`Loaded ${candles.length} historical candles${rangeLabel} from Binance public spot data.${limitNote}`);
+        setCursor(Math.min(25, candles.length));
       })
       .catch(() => {
         if (controller.signal.aborted) return;
@@ -84,7 +89,7 @@ export default function ReplayWorkspace() {
         if (!controller.signal.aborted) setDataLoading(false);
       });
     return () => controller.abort();
-  }, [symbol, timeframe]);
+  }, [symbol, timeframe, appliedRange]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -203,6 +208,32 @@ export default function ReplayWorkspace() {
     setTradeMessage(`Trade closed at ${formatPrice(exit, symbol)}.`);
   };
 
+  const applyDateRange = () => {
+    if (!rangeFrom || !rangeTo) {
+      setDataMessage("Choose both a start date and an end date.");
+      return;
+    }
+    if (rangeFrom > rangeTo) {
+      setDataMessage("The start date must be on or before the end date.");
+      return;
+    }
+    setPlaying(false);
+    setPosition(null);
+    setTrades([]);
+    setAppliedRange({ from: rangeFrom, to: rangeTo });
+    setCursor(25);
+  };
+
+  const clearDateRange = () => {
+    setPlaying(false);
+    setPosition(null);
+    setTrades([]);
+    setRangeFrom("");
+    setRangeTo("");
+    setAppliedRange(null);
+    setCursor(25);
+  };
+
   const totalPnl = trades.reduce((sum, trade) => sum + trade.pnl, 0);
   const calculationEntry = position ? position.entry : data[Math.max(0, cursor - 1)].close;
   const calculationSide = position ? position.side : plannedSide;
@@ -236,6 +267,13 @@ export default function ReplayWorkspace() {
         <label>Timeframe<select value={timeframe} onChange={e => { setTimeframe(e.target.value); reset(); }}><option>1m</option><option>5m</option><option>15m</option><option>30m</option><option>1H</option><option>4H</option><option>1D</option><option>1W</option><option>1M</option><option>3M</option><option>6M</option><option>1Y</option></select></label>
         <label>Speed<select value={speed} onChange={e => setSpeed(e.target.value)}><option>1x</option><option>2x</option><option>4x</option></select></label>
       </div>
+      {(symbol === "BTC/USDT" || symbol === "ETH/USDT" || symbol === "SOL/USDT") && <div className="replay-date-range">
+        <label>From date<input type="date" value={rangeFrom} max={rangeTo || undefined} onChange={e => setRangeFrom(e.target.value)} /></label>
+        <label>To date<input type="date" value={rangeTo} min={rangeFrom || undefined} onChange={e => setRangeTo(e.target.value)} /></label>
+        <button onClick={applyDateRange} disabled={dataLoading}>Load date range</button>
+        {appliedRange && <button className="clear-range-button" onClick={clearDateRange}>Clear range</button>}
+        <span>Crypto historical data · up to 1,000 candles per request</span>
+      </div>}
       <div className="replay-chart-wrap">
         {position && <div className="chart-level-legend" aria-label="Open trade chart levels">
           <span><i className="entry-level-dot" /> Entry {formatPrice(position.entry, symbol)}</span>
