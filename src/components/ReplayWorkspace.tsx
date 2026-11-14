@@ -9,6 +9,7 @@ type Trade = {
   entry: number;
   exit: number;
   units: number;
+  multiplier: number;
   pnl: number;
   entryIndex: number;
   exitIndex: number;
@@ -18,10 +19,13 @@ type OpenTrade = {
   side: Side;
   entry: number;
   units: number;
+  multiplier: number;
   stopLoss: number | null;
   takeProfit: number | null;
   entryIndex: number;
 };
+
+const quoteCurrency = (symbol: string) => symbol.includes("/") ? symbol.split("/")[1] : "USD";
 
 const formatPrice = (value: number, symbol: string) =>
   value.toLocaleString(undefined, { minimumFractionDigits: symbol.includes("JPY") ? 3 : 2, maximumFractionDigits: symbol.includes("JPY") ? 3 : 5 });
@@ -35,6 +39,9 @@ export default function ReplayWorkspace() {
   const [symbol, setSymbol] = useState("EUR/USD");
   const [timeframe, setTimeframe] = useState("1H");
   const [units, setUnits] = useState("1000");
+  const [accountBalance, setAccountBalance] = useState("10000");
+  const [riskPercent, setRiskPercent] = useState("1");
+  const [contractMultiplier, setContractMultiplier] = useState("1");
   const [plannedSide, setPlannedSide] = useState<Side>("BUY");
   const [stopLoss, setStopLoss] = useState("");
   const [takeProfit, setTakeProfit] = useState("");
@@ -119,7 +126,8 @@ export default function ReplayWorkspace() {
         const direction = position.side === "BUY" ? 1 : -1;
         setTrades(previous => [...previous, {
           id: Date.now(), side: position.side, entry: position.entry, exit, units: position.units,
-          pnl: (exit - position.entry) * direction * position.units,
+          pnl: (exit - position.entry) * direction * position.units * position.multiplier,
+          multiplier: position.multiplier,
           entryIndex: position.entryIndex, exitIndex: cursor + 1,
           reason: stopHit ? "Stop Loss" : "Take Profit",
         }]);
@@ -146,6 +154,7 @@ export default function ReplayWorkspace() {
     if (position) { setTradeMessage("Close your open trade before opening another."); return; }
     const amount = Number(units);
     if (!Number.isFinite(amount) || amount <= 0) { setTradeMessage("Enter a valid position size greater than zero."); return; }
+    if (!Number.isFinite(Number(contractMultiplier)) || Number(contractMultiplier) <= 0) { setTradeMessage("Contract multiplier must be greater than zero."); return; }
     const entry = data[Math.max(0, cursor - 1)].close;
     const sl = stopLoss.trim() === "" ? null : Number(stopLoss);
     const tp = takeProfit.trim() === "" ? null : Number(takeProfit);
@@ -154,7 +163,7 @@ export default function ReplayWorkspace() {
       setTradeMessage(side === "BUY" ? "For a BUY, Stop Loss must be below entry and Take Profit above entry." : "For a SELL, Stop Loss must be above entry and Take Profit below entry.");
       return;
     }
-    setPosition({ side, entry, units: amount, stopLoss: sl, takeProfit: tp, entryIndex: cursor });
+    setPosition({ side, entry, units: amount, multiplier: Number(contractMultiplier), stopLoss: sl, takeProfit: tp, entryIndex: cursor });
     setTradeMessage(`${side} opened at ${formatPrice(entry, symbol)}.`);
     setPlaying(false);
   };
@@ -165,7 +174,8 @@ export default function ReplayWorkspace() {
     const direction = position.side === "BUY" ? 1 : -1;
     setTrades(previous => [...previous, {
       id: Date.now(), side: position.side, entry: position.entry, exit, units: position.units,
-      pnl: (exit - position.entry) * direction * position.units,
+      pnl: (exit - position.entry) * direction * position.units * position.multiplier,
+      multiplier: position.multiplier,
       entryIndex: position.entryIndex, exitIndex: cursor, reason: "Manual close",
     }]);
     setPosition(null);
@@ -183,11 +193,19 @@ export default function ReplayWorkspace() {
   const validTarget = calculationTarget !== null && Number.isFinite(calculationTarget) &&
     (calculationSide === "BUY" ? calculationTarget > calculationEntry : calculationTarget < calculationEntry);
   const validUnits = Number.isFinite(calculationUnits) && calculationUnits > 0;
-  const estimatedRisk = validStop && validUnits ? Math.abs(calculationEntry - calculationStop) * calculationUnits : null;
-  const estimatedReward = validTarget && validUnits ? Math.abs(calculationTarget - calculationEntry) * calculationUnits : null;
+  const multiplier = Number(contractMultiplier);
+  const validMultiplier = Number.isFinite(multiplier) && multiplier > 0;
+  const balance = Number(accountBalance);
+  const riskPct = Number(riskPercent);
+  const validRiskBudget = Number.isFinite(balance) && balance > 0 && Number.isFinite(riskPct) && riskPct > 0 && riskPct <= 100;
+  const riskBudget = validRiskBudget ? balance * riskPct / 100 : null;
+  const riskPerUnit = validStop && validMultiplier ? Math.abs(calculationEntry - calculationStop) * multiplier : null;
+  const suggestedUnits = riskBudget !== null && riskPerUnit !== null && riskPerUnit > 0 ? riskBudget / riskPerUnit : null;
+  const estimatedRisk = validStop && validUnits && validMultiplier ? Math.abs(calculationEntry - calculationStop) * calculationUnits * multiplier : null;
+  const estimatedReward = validTarget && validUnits && validMultiplier ? Math.abs(calculationTarget - calculationEntry) * calculationUnits * multiplier : null;
   const riskRewardRatio = estimatedRisk !== null && estimatedRisk > 0 && estimatedReward !== null
     ? estimatedReward / estimatedRisk : null;
-  const unrealizedPnl = position ? (data[Math.max(0, cursor - 1)].close - position.entry) * (position.side === "BUY" ? 1 : -1) * position.units : 0;
+  const unrealizedPnl = position ? (data[Math.max(0, cursor - 1)].close - position.entry) * (position.side === "BUY" ? 1 : -1) * position.units * position.multiplier : 0;
 
   return <section className="replay-workspace">
     <div className="replay-heading"><div><div className="eyebrow">PRACTICE MODE</div><h2>Manual Chart Replay</h2><p>Step through candles, practise decisions, and track your process.</p></div><span className="sample-badge">SAMPLE DATA</span></div>
@@ -217,7 +235,10 @@ export default function ReplayWorkspace() {
     <section className="panel trade-panel">
       <div className="trade-panel-heading"><div><div className="panel-title">Trade execution</div><p>Place simulated practice trades on the replay chart.</p></div><span className="practice-tag">PAPER TRADING</span></div>
       <div className="trade-form">
-        <label>Position size (units)<input type="number" min="1" step="1" value={units} onChange={e => setUnits(e.target.value)} /></label>
+        <label>Position size (units)<input type="number" min="0.000001" step="any" value={units} onChange={e => setUnits(e.target.value)} /></label>
+        <label>Account balance (quote currency)<input type="number" min="0" step="any" value={accountBalance} onChange={e => setAccountBalance(e.target.value)} /></label>
+        <label>Risk per trade (%)<input type="number" min="0.01" max="100" step="0.01" value={riskPercent} onChange={e => setRiskPercent(e.target.value)} /></label>
+        <label>Contract multiplier<input type="number" min="0.000001" step="any" value={contractMultiplier} onChange={e => setContractMultiplier(e.target.value)} /></label>
         <label>Stop Loss (price)<input type="number" step="any" placeholder="Optional" value={stopLoss} onChange={e => setStopLoss(e.target.value)} /></label>
         <label>Take Profit (price)<input type="number" step="any" placeholder="Optional" value={takeProfit} onChange={e => setTakeProfit(e.target.value)} /></label>
       </div>
@@ -230,11 +251,14 @@ export default function ReplayWorkspace() {
         </label>}
         <div className="risk-calculator-grid">
           <div><span>Reference entry</span><b>{formatPrice(calculationEntry, symbol)}</b></div>
-          <div><span>Potential loss (calculation units)</span><b className="negative">{estimatedRisk === null ? "Set a valid Stop Loss" : formatMoney(-estimatedRisk)}</b></div>
-          <div><span>Potential profit (calculation units)</span><b className="positive">{estimatedReward === null ? "Set a valid Take Profit" : formatMoney(estimatedReward)}</b></div>
-          <div><span>Risk / Reward</span><b>{riskRewardRatio === null ? "—" : `1 : ${riskRewardRatio.toFixed(2)}`}</b></div>
+          <div><span>Potential loss (quote-currency units)</span><b className="negative">{estimatedRisk === null ? "Set a valid Stop Loss" : formatMoney(-estimatedRisk)}</b></div>
+          <div><span>Potential profit (quote-currency units)</span><b className="positive">{estimatedReward === null ? "Set a valid Take Profit" : formatMoney(estimatedReward)}</b></div>
+          <div><span>Risk / Reward</span><b>{riskRewardRatio === null ? "—" : `1 : ${riskRewardRatio.toFixed(2)}`}</b>
+          <div><span>Risk budget</span><b>{riskBudget === null ? "Enter valid balance / risk" : `${riskBudget.toFixed(2)} ${quoteCurrency(symbol)}`}</b></div>
+          <div><span>Suggested position size</span><b>{suggestedUnits === null ? "Set valid Stop Loss" : `${suggestedUnits.toFixed(4)} units`}</b></div></div>
         </div>
-        <p>Uses entry price, position size, Stop Loss and Take Profit. Simplified price-difference × units estimate; not a USD amount. Excludes contract specifications and trading costs.</p>
+        <p>Price difference × units × contract multiplier. Estimates are in {quoteCurrency(symbol)} and assume your account balance is in that same currency. Set the multiplier to match your broker's contract specification; no automatic FX conversion, spreads, commissions, swaps or slippage are included.</p>
+        {suggestedUnits !== null && <button className="apply-size-button" onClick={() => setUnits(String(Number(suggestedUnits.toFixed(6))))}>Use suggested position size</button>}
       </div>
       <div className="trade-actions">
         <button className="buy-button" disabled={!!position || cursor === 0} onClick={() => openTrade("BUY")}><TrendingUp size={16}/> Buy</button>
@@ -249,6 +273,6 @@ export default function ReplayWorkspace() {
       <div className="trade-summary"><div><span>Closed trades</span><b>{trades.length}</b></div><div><span>Realized P&amp;L</span><b className={totalPnl >= 0 ? "positive" : "negative"}>{formatMoney(totalPnl)}</b></div><div><span>Win rate</span><b>{trades.length ? `${(trades.filter(t => t.pnl > 0).length / trades.length * 100).toFixed(1)}%` : "—"}</b></div></div>
       {trades.length > 0 && <div className="trade-history"><b>Trade history</b>{[...trades].reverse().map(trade => <div className="trade-history-row" key={trade.id}><span className={trade.side === "BUY" ? "positive" : "negative"}>{trade.side}</span><span>{formatPrice(trade.entry, symbol)} → {formatPrice(trade.exit, symbol)}</span><span>{trade.reason}</span><b className={trade.pnl >= 0 ? "positive" : "negative"}>{formatMoney(trade.pnl)}</b></div>)}</div>}
     </section>
-    <div className="replay-disclaimer">Practice simulation only. All candles are generated sample data, not real historical prices. Trades are not sent to a broker. P&amp;L is a simplified price-difference × units calculation, displayed as calculation units rather than dollars. Contract sizes, pip/tick values, account-currency conversion, spreads, commissions, swaps, margin, and slippage are not modeled. If both Stop Loss and Take Profit are touched within one candle, the simulation assumes Stop Loss was hit first.</div>
+    <div className="replay-disclaimer">Practice simulation only. All candles are generated sample data, not real historical prices. Trades are not sent to a broker. P&amp;L is price difference × units × the configured contract multiplier, shown in the instrument's quote currency. The multiplier must match the broker's specification. Automatic account-currency conversion, spreads, commissions, swaps, margin, and slippage are not modeled. If both Stop Loss and Take Profit are touched within one candle, the simulation assumes Stop Loss was hit first.</div>
   </section>;
 }
