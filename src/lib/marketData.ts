@@ -145,3 +145,37 @@ export async function fetchBinanceCandles(
   if (candles.length < 2) throw new Error("Not enough historical candles were returned for this date range.");
   return customMonths[timeframe] ? aggregateMonthlyCandles(candles, customMonths[timeframe]) : candles;
 }
+
+/** Parse a user-supplied OHLC CSV. Expected headers: timestamp/time/date, open, high, low, close. */
+export function parseImportedCandles(csvText: string): ReplayCandle[] {
+  const lines = csvText.replace(/^\\uFEFF/, "").split(/\\r?\\n/).map(line => line.trim()).filter(Boolean);
+  if (lines.length < 3) throw new Error("The CSV must contain a header and at least two candle rows.");
+  const splitRow = (line: string) => {
+    const cells: string[] = []; let cell = ""; let quoted = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"' && line[i + 1] === '"' && quoted) { cell += '"'; i++; }
+      else if (char === '"') quoted = !quoted;
+      else if (char === "," && !quoted) { cells.push(cell.trim()); cell = ""; }
+      else cell += char;
+    }
+    cells.push(cell.trim()); return cells;
+  };
+  const headers = splitRow(lines[0]).map(value => value.toLowerCase().replace(/[ _-]/g, ""));
+  const findColumn = (...names: string[]) => headers.findIndex(header => names.includes(header));
+  const timeIndex = findColumn("timestamp", "time", "datetime", "date");
+  const openIndex = findColumn("open"), highIndex = findColumn("high"), lowIndex = findColumn("low"), closeIndex = findColumn("close");
+  if ([timeIndex, openIndex, highIndex, lowIndex, closeIndex].some(index => index < 0)) throw new Error("CSV headers must include timestamp (or time/date), open, high, low and close.");
+  const byTime = new Map<number, ReplayCandle>();
+  for (const line of lines.slice(1)) {
+    const cells = splitRow(line), rawTime = cells[timeIndex] ?? "", numericTime = Number(rawTime);
+    const milliseconds = rawTime !== "" && Number.isFinite(numericTime) ? (numericTime > 100000000000 ? numericTime : numericTime * 1000) : Date.parse(rawTime.includes(" ") && !rawTime.includes("T") ? rawTime.replace(" ", "T") + "Z" : rawTime);
+    const open = Number(cells[openIndex]), high = Number(cells[highIndex]), low = Number(cells[lowIndex]), close = Number(cells[closeIndex]);
+    if (![milliseconds, open, high, low, close].every(Number.isFinite) || high < Math.max(open, close, low) || low > Math.min(open, close, high)) continue;
+    const seconds = Math.floor(milliseconds / 1000);
+    byTime.set(seconds, { time: seconds as UTCTimestamp, open, high, low, close });
+  }
+  const candles = [...byTime.values()].sort((a, b) => Number(a.time) - Number(b.time));
+  if (candles.length < 2) throw new Error("No valid candles found. Check the timestamp format and OHLC values.");
+  return candles;
+}
