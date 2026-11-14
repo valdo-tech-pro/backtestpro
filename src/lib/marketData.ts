@@ -15,6 +15,10 @@ const BINANCE_SYMBOLS: Record<string, string> = {
 };
 
 const BINANCE_INTERVALS: Record<string, string> = {
+  "1M": "1m",
+  "5M": "5m",
+  "15M": "15m",
+  "30M": "30m",
   "1H": "1h",
   "4H": "4h",
   "1D": "1d",
@@ -22,7 +26,7 @@ const BINANCE_INTERVALS: Record<string, string> = {
 
 export function createSampleCandles(symbol: string, timeframe: string): ReplayCandle[] {
   const seed = symbol.split("").reduce((sum, c) => sum + c.charCodeAt(0), 0);
-  const step = timeframe === "4H" ? 14400 : timeframe === "1D" ? 86400 : 3600;
+  const step = ({ "1M": 60, "5M": 300, "15M": 900, "30M": 1800, "1H": 3600, "4H": 14400, "1D": 86400 } as Record<string, number>)[timeframe] ?? 3600;
   const base = symbol.includes("JPY") ? 150 : symbol.includes("XAU") ? 2300 : symbol.includes("BTC") ? 65000 : symbol.includes("ETH") ? 3200 : symbol.includes("SOL") ? 150 : 1.085;
   let previous = base;
   const start = Math.floor(Date.now() / 1000) - 120 * step;
