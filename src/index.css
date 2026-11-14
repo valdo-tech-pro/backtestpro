@@ -40,3 +40,6 @@
 .replay-date-range .clear-range-button{border-color:#3a4b63;background:#202c3e;color:#b8c7dc}
 .replay-date-range>span{flex-basis:100%;font-size:9px;color:#71839c}
 @media(max-width:700px){.replay-date-range{align-items:stretch}.replay-date-range label{flex:1;min-width:130px}.replay-date-range input{width:100%;min-width:0}.replay-date-range button{flex:1}}
+
+/* Historical CSV import */
+.replay-import-range input[type=file]{max-width:260px;color:#aebbd0;font-size:10px}.replay-import-range input[type=file]::file-selector-button{margin-right:8px;border:1px solid #4965ad;background:#1b2d50;color:#bfd0ff;border-radius:5px;padding:7px 9px;font:inherit;cursor:pointer}
