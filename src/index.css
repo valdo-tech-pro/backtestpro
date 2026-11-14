@@ -17,3 +17,12 @@
 
 .risk-calculator{margin-top:15px;padding:14px;border:1px solid #2b3a52;border-radius:8px;background:#111d2e}.risk-calculator-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.risk-calculator-heading>div{display:flex;align-items:center;gap:8px;color:#b9c9ff}.risk-calculator-heading b{font:700 11px Manrope,sans-serif;color:#e8edf7}.risk-calculator-heading>span{font-size:8px;letter-spacing:1px;color:#d8b875;border:1px solid #66532f;border-radius:4px;padding:4px 6px}.risk-side-select{display:flex;align-items:center;gap:9px;color:#8492a8;font-size:9px;margin-bottom:11px}.risk-side-select select{background:#18263b;color:#dce6f5;border:1px solid #34445e;border-radius:5px;padding:6px 8px;font:inherit}.risk-calculator-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.risk-calculator-grid>div{display:grid;gap:6px;padding:10px;background:#172438;border:1px solid #2a3b54;border-radius:6px;min-width:0}.risk-calculator-grid span{font-size:9px;color:#8492a8}.risk-calculator-grid b{font:600 11px Manrope,sans-serif;color:#e8edf7;overflow-wrap:anywhere}.risk-calculator>p{font-size:9px;line-height:1.5;color:#74839a;margin:10px 0 0}
 @media(max-width:700px){.risk-calculator{padding:11px}.risk-calculator-grid{grid-template-columns:1fr 1fr}.risk-calculator-grid>div{padding:9px}.risk-calculator-grid b{font-size:10px}.risk-side-select{flex-wrap:wrap}}
+
+
+/* Risk sizing controls */
+.trade-form{grid-template-columns:repeat(4,minmax(0,1fr))}
+.trade-form input:disabled{opacity:.65;cursor:not-allowed}
+.risk-calculator-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.apply-size-button{margin-top:10px;border:1px solid #4965ad;background:#1b2d50;color:#bfd0ff;border-radius:6px;padding:8px 11px;font-size:10px;font-weight:600}
+.apply-size-button:hover{background:#263e6b}
+@media(max-width:700px){.trade-form{grid-template-columns:1fr 1fr}.risk-calculator-grid{grid-template-columns:1fr 1fr}}
