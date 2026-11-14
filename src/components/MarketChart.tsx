@@ -58,6 +58,10 @@ export default function MarketChart({ symbol, timeframe }: MarketChartProps) {
       "4H": 4 * 60 * 60,
       "1D": 24 * 60 * 60,
       "1W": 7 * 24 * 60 * 60,
+      "1M": 30 * 24 * 60 * 60,
+      "3M": 90 * 24 * 60 * 60,
+      "6M": 180 * 24 * 60 * 60,
+      "1Y": 365 * 24 * 60 * 60,
     };
     const step = stepByTimeframe[timeframe] ?? 60 * 60;
     const now = Math.floor(Date.now() / 1000);
