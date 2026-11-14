@@ -76,7 +76,7 @@ export default function ReplayWorkspace() {
         setData(candles);
         setDataSource("BINANCE HISTORICAL");
         const rangeLabel = appliedRange ? ` for ${appliedRange.from} to ${appliedRange.to}` : "";
-        const limitNote = appliedRange && candles.length === 1000 ? " Binance returned the 1,000-candle request limit; narrow the date range for a more complete view." : "";
+        const limitNote = appliedRange && candles.length >= 20000 ? " The 20,000-candle safety limit was reached; narrow the date range or choose a higher timeframe to load the rest." : "";
         setDataMessage(`Loaded ${candles.length} historical candles${rangeLabel} from Binance public spot data.${limitNote}`);
         setCursor(Math.min(25, candles.length));
       })
@@ -272,7 +272,7 @@ export default function ReplayWorkspace() {
         <label>To date<input type="date" value={rangeTo} min={rangeFrom || undefined} onChange={e => setRangeTo(e.target.value)} /></label>
         <button onClick={applyDateRange} disabled={dataLoading}>Load date range</button>
         {appliedRange && <button className="clear-range-button" onClick={clearDateRange}>Clear range</button>}
-        <span>Crypto historical data · up to 1,000 candles per request</span>
+        <span>Crypto historical data · paginated in 1,000-candle batches · up to 20,000 candles per load</span>
       </div>}
       <div className="replay-chart-wrap">
         {position && <div className="chart-level-legend" aria-label="Open trade chart levels">
