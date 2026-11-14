@@ -253,7 +253,7 @@ export default function ReplayWorkspace() {
           <div><span>Reference entry</span><b>{formatPrice(calculationEntry, symbol)}</b></div>
           <div><span>Potential loss (quote-currency units)</span><b className="negative">{estimatedRisk === null ? "Set a valid Stop Loss" : formatMoney(-estimatedRisk, quoteCurrency(symbol))}</b></div>
           <div><span>Potential profit (quote-currency units)</span><b className="positive">{estimatedReward === null ? "Set a valid Take Profit" : formatMoney(estimatedReward, quoteCurrency(symbol))}</b></div>
-          <div><span>Risk / Reward</span><b>{riskRewardRatio === null ? "—" : `1 : ${riskRewardRatio.toFixed(2)}`}</b>
+          <div><span>Risk / Reward</span><b>{riskRewardRatio === null ? "—" : `1 : ${riskRewardRatio.toFixed(2)}`}</b></div>
           <div><span>Risk budget</span><b>{riskBudget === null ? "Enter valid balance / risk" : `${riskBudget.toFixed(2)} ${quoteCurrency(symbol)}`}</b></div>
           <div><span>Suggested position size</span><b>{suggestedUnits === null ? "Set valid Stop Loss" : `${suggestedUnits.toFixed(4)} units`}</b></div></div>
         </div>
