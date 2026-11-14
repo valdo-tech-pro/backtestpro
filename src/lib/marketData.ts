@@ -80,36 +80,68 @@ export async function fetchBinanceCandles(
   const interval = customMonths[timeframe] ? "1M" : BINANCE_INTERVALS[timeframe];
   if (!pair || !interval) throw new Error("This market is not supported by the Binance data adapter.");
 
-  const query = new URLSearchParams({ symbol: pair, interval, limit: dateRange ? "1000" : "500" });
+  const MAX_CANDLES = 20000;
+  const PAGE_SIZE = 1000;
+  const startTime = dateRange ? new Date(`${dateRange.from}T00:00:00.000Z`).getTime() : undefined;
+  const endTime = dateRange ? new Date(`${dateRange.to}T23:59:59.999Z`).getTime() : undefined;
   if (dateRange) {
-    const startTime = new Date(`${dateRange.from}T00:00:00.000Z`).getTime();
-    const endTime = new Date(`${dateRange.to}T23:59:59.999Z`).getTime();
-    if (!Number.isFinite(startTime) || !Number.isFinite(endTime) || startTime > endTime) {
-      throw new Error("Choose a valid date range where the start date is not after the end date.");
+    const validDate = (value: string) => /^\\d{4}-\\d{2}-\\d{2}$/.test(value) &&
+      !Number.isNaN(new Date(`${value}T00:00:00.000Z`).getTime()) &&
+      new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value;
+    if (!validDate(dateRange.from) || !validDate(dateRange.to) ||
+        !Number.isFinite(startTime) || !Number.isFinite(endTime) || (startTime as number) > (endTime as number)) {
+      throw new Error("Choose valid dates where the start date is not after the end date.");
     }
-    query.set("startTime", String(startTime));
-    query.set("endTime", String(endTime));
   }
-  const response = await fetch(`https://api.binance.com/api/v3/klines?${query.toString()}`, {
-    signal,
-    headers: { Accept: "application/json" },
-  });
-  if (!response.ok) throw new Error(`Binance returned HTTP ${response.status}.`);
 
-  const rows: unknown = await response.json();
-  if (!Array.isArray(rows)) throw new Error("Unexpected Binance candle response.");
-  const candles = rows.map((row): ReplayCandle => {
-    if (!Array.isArray(row) || row.length < 5) throw new Error("Invalid Binance candle row.");
-    const timestamp = Number(row[0]);
-    const open = Number(row[1]);
-    const high = Number(row[2]);
-    const low = Number(row[3]);
-    const close = Number(row[4]);
-    if (![timestamp, open, high, low, close].every(Number.isFinite)) {
-      throw new Error("Binance returned non-numeric candle data.");
+  const candlesByTime = new Map<number, ReplayCandle>();
+  let nextStartTime = startTime;
+  let hasMore = true;
+  while (hasMore && candlesByTime.size < MAX_CANDLES) {
+    if (signal?.aborted) throw new DOMException("The historical data request was cancelled.", "AbortError");
+    const query = new URLSearchParams({ symbol: pair, interval, limit: String(dateRange ? PAGE_SIZE : 500) });
+    if (dateRange) {
+      query.set("startTime", String(nextStartTime));
+      query.set("endTime", String(endTime));
     }
-    return { time: Math.floor(timestamp / 1000) as UTCTimestamp, open, high, low, close };
-  });
-  if (candles.length < 2) throw new Error("Not enough historical candles were returned.");
+    const response = await fetch(`https://api.binance.com/api/v3/klines?${query.toString()}`, {
+      signal,
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) throw new Error(`Binance returned HTTP ${response.status}.`);
+
+    const rows: unknown = await response.json();
+    if (!Array.isArray(rows)) throw new Error("Unexpected Binance candle response.");
+    if (rows.length === 0) break;
+
+    let lastOpenTime: number | null = null;
+    for (const row of rows) {
+      if (!Array.isArray(row) || row.length < 5) throw new Error("Invalid Binance candle row.");
+      const timestamp = Number(row[0]);
+      const open = Number(row[1]);
+      const high = Number(row[2]);
+      const low = Number(row[3]);
+      const close = Number(row[4]);
+      if (![timestamp, open, high, low, close].every(Number.isFinite)) {
+        throw new Error("Binance returned non-numeric candle data.");
+      }
+      candlesByTime.set(timestamp, {
+        time: Math.floor(timestamp / 1000) as UTCTimestamp, open, high, low, close,
+      });
+      lastOpenTime = timestamp;
+    }
+
+    if (!dateRange || rows.length < PAGE_SIZE || lastOpenTime === null) {
+      hasMore = false;
+    } else {
+      nextStartTime = lastOpenTime + 1;
+      if ((nextStartTime as number) > (endTime as number)) hasMore = false;
+    }
+  }
+
+  const candles = [...candlesByTime.values()]
+    .sort((a, b) => Number(a.time) - Number(b.time))
+    .slice(0, MAX_CANDLES);
+  if (candles.length < 2) throw new Error("Not enough historical candles were returned for this date range.");
   return customMonths[timeframe] ? aggregateMonthlyCandles(candles, customMonths[timeframe]) : candles;
 }
