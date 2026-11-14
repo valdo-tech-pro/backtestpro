@@ -50,10 +50,18 @@ export default function MarketChart({ symbol, timeframe }: MarketChartProps) {
     });
 
     const stepByTimeframe: Record<string, number> = {
+      "1m": 60,
+      "5m": 5 * 60,
+      "15m": 15 * 60,
+      "30m": 30 * 60,
       "1H": 60 * 60,
       "4H": 4 * 60 * 60,
       "1D": 24 * 60 * 60,
       "1W": 7 * 24 * 60 * 60,
+      "1M": 30 * 24 * 60 * 60,
+      "3M": 90 * 24 * 60 * 60,
+      "6M": 180 * 24 * 60 * 60,
+      "1Y": 365 * 24 * 60 * 60,
     };
     const step = stepByTimeframe[timeframe] ?? 60 * 60;
     const now = Math.floor(Date.now() / 1000);
