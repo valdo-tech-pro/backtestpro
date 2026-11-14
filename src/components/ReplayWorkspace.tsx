@@ -25,7 +25,7 @@ type OpenTrade = {
 
 const formatPrice = (value: number, symbol: string) =>
   value.toLocaleString(undefined, { minimumFractionDigits: symbol.includes("JPY") ? 3 : 2, maximumFractionDigits: symbol.includes("JPY") ? 3 : 5 });
-const formatMoney = (value: number) => `${value < 0 ? "-" : value > 0 ? "+" : ""}$${Math.abs(value).toFixed(2)}`;
+const formatMoney = (value: number) => `${value < 0 ? "-" : value > 0 ? "+" : ""}${Math.abs(value).toFixed(2)} units`;
 
 export default function ReplayWorkspace() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -230,11 +230,11 @@ export default function ReplayWorkspace() {
         </label>}
         <div className="risk-calculator-grid">
           <div><span>Reference entry</span><b>{formatPrice(calculationEntry, symbol)}</b></div>
-          <div><span>Potential loss</span><b className="negative">{estimatedRisk === null ? "Set a valid Stop Loss" : formatMoney(-estimatedRisk)}</b></div>
-          <div><span>Potential profit</span><b className="positive">{estimatedReward === null ? "Set a valid Take Profit" : formatMoney(estimatedReward)}</b></div>
+          <div><span>Potential loss (calculation units)</span><b className="negative">{estimatedRisk === null ? "Set a valid Stop Loss" : formatMoney(-estimatedRisk)}</b></div>
+          <div><span>Potential profit (calculation units)</span><b className="positive">{estimatedReward === null ? "Set a valid Take Profit" : formatMoney(estimatedReward)}</b></div>
           <div><span>Risk / Reward</span><b>{riskRewardRatio === null ? "—" : `1 : ${riskRewardRatio.toFixed(2)}`}</b></div>
         </div>
-        <p>Uses entry price, position size, Stop Loss and Take Profit. Simplified estimate; excludes trading costs and contract specifications.</p>
+        <p>Uses entry price, position size, Stop Loss and Take Profit. Simplified price-difference × units estimate; not a USD amount. Excludes contract specifications and trading costs.</p>
       </div>
       <div className="trade-actions">
         <button className="buy-button" disabled={!!position || cursor === 0} onClick={() => openTrade("BUY")}><TrendingUp size={16}/> Buy</button>
@@ -249,6 +249,6 @@ export default function ReplayWorkspace() {
       <div className="trade-summary"><div><span>Closed trades</span><b>{trades.length}</b></div><div><span>Realized P&amp;L</span><b className={totalPnl >= 0 ? "positive" : "negative"}>{formatMoney(totalPnl)}</b></div><div><span>Win rate</span><b>{trades.length ? `${(trades.filter(t => t.pnl > 0).length / trades.length * 100).toFixed(1)}%` : "—"}</b></div></div>
       {trades.length > 0 && <div className="trade-history"><b>Trade history</b>{[...trades].reverse().map(trade => <div className="trade-history-row" key={trade.id}><span className={trade.side === "BUY" ? "positive" : "negative"}>{trade.side}</span><span>{formatPrice(trade.entry, symbol)} → {formatPrice(trade.exit, symbol)}</span><span>{trade.reason}</span><b className={trade.pnl >= 0 ? "positive" : "negative"}>{formatMoney(trade.pnl)}</b></div>)}</div>}
     </section>
-    <div className="replay-disclaimer">Practice simulation only. All candles are generated sample data, not real historical prices. Trades are not sent to a broker. P&amp;L is a simplified price-difference calculation in quote-currency units; spreads, commissions, swaps, margin, and slippage are not included. If both Stop Loss and Take Profit are touched within one candle, the simulation assumes Stop Loss was hit first.</div>
+    <div className="replay-disclaimer">Practice simulation only. All candles are generated sample data, not real historical prices. Trades are not sent to a broker. P&amp;L is a simplified price-difference × units calculation, displayed as calculation units rather than dollars. Contract sizes, pip/tick values, account-currency conversion, spreads, commissions, swaps, margin, and slippage are not modeled. If both Stop Loss and Take Profit are touched within one candle, the simulation assumes Stop Loss was hit first.</div>
   </section>;
 }
