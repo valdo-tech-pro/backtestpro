@@ -22,11 +22,20 @@ const BINANCE_INTERVALS: Record<string, string> = {
   "1H": "1h",
   "4H": "4h",
   "1D": "1d",
+  "1W": "1w",
+  "1M": "1M",
+};
+
+const SAMPLE_STEPS: Record<string, number> = {
+  "1m": 60, "5m": 300, "15m": 900, "30m": 1800,
+  "1H": 3600, "4H": 14400, "1D": 86400,
+  "1W": 7 * 86400, "1M": 30 * 86400, "3M": 90 * 86400,
+  "6M": 180 * 86400, "1Y": 365 * 86400,
 };
 
 export function createSampleCandles(symbol: string, timeframe: string): ReplayCandle[] {
   const seed = symbol.split("").reduce((sum, c) => sum + c.charCodeAt(0), 0);
-  const step = ({ "1m": 60, "5m": 300, "15m": 900, "30m": 1800, "1H": 3600, "4H": 14400, "1D": 86400 } as Record<string, number>)[timeframe] ?? 3600;
+  const step = SAMPLE_STEPS[timeframe] ?? 3600;
   const base = symbol.includes("JPY") ? 150 : symbol.includes("XAU") ? 2300 : symbol.includes("BTC") ? 65000 : symbol.includes("ETH") ? 3200 : symbol.includes("SOL") ? 150 : 1.085;
   let previous = base;
   const start = Math.floor(Date.now() / 1000) - 120 * step;
@@ -40,13 +49,34 @@ export function createSampleCandles(symbol: string, timeframe: string): ReplayCa
   });
 }
 
+function aggregateMonthlyCandles(candles: ReplayCandle[], monthsPerCandle: number): ReplayCandle[] {
+  const groups = new Map<string, ReplayCandle[]>();
+  for (const candle of candles) {
+    const date = new Date(Number(candle.time) * 1000);
+    const month = date.getUTCMonth();
+    const bucketMonth = Math.floor(month / monthsPerCandle) * monthsPerCandle;
+    const key = `${date.getUTCFullYear()}-${bucketMonth}`;
+    const group = groups.get(key) ?? [];
+    group.push(candle);
+    groups.set(key, group);
+  }
+  return [...groups.values()].map(group => ({
+    time: group[0].time,
+    open: group[0].open,
+    high: Math.max(...group.map(candle => candle.high)),
+    low: Math.min(...group.map(candle => candle.low)),
+    close: group[group.length - 1].close,
+  }));
+}
+
 export async function fetchBinanceCandles(
   symbol: string,
   timeframe: string,
   signal?: AbortSignal,
 ): Promise<ReplayCandle[]> {
   const pair = BINANCE_SYMBOLS[symbol];
-  const interval = BINANCE_INTERVALS[timeframe];
+  const customMonths: Record<string, number> = { "3M": 3, "6M": 6, "1Y": 12 };
+  const interval = customMonths[timeframe] ? "1M" : BINANCE_INTERVALS[timeframe];
   if (!pair || !interval) throw new Error("This market is not supported by the Binance data adapter.");
 
   const query = new URLSearchParams({ symbol: pair, interval, limit: "500" });
@@ -71,5 +101,5 @@ export async function fetchBinanceCandles(
     return { time: Math.floor(timestamp / 1000) as UTCTimestamp, open, high, low, close };
   });
   if (candles.length < 2) throw new Error("Not enough historical candles were returned.");
-  return candles;
+  return customMonths[timeframe] ? aggregateMonthlyCandles(candles, customMonths[timeframe]) : candles;
 }
