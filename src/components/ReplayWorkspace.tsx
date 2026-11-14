@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createSampleCandles, fetchBinanceCandles, type ReplayCandle } from "../lib/marketData";
-import { CandlestickSeries, ColorType, createChart, LineStyle, type UTCTimestamp } from "lightweight-charts";
+import { CandlestickSeries, ColorType, createChart, LineStyle } from "lightweight-charts";
 import { Play, Pause, SkipBack, SkipForward, RotateCcw, TrendingUp, TrendingDown, XCircle, Calculator } from "lucide-react";
 
 type Side = "BUY" | "SELL";
