@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { createSampleCandles, fetchBinanceCandles, type ReplayCandle } from "../lib/marketData";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import { createSampleCandles, fetchBinanceCandles, parseImportedCandles, type ReplayCandle } from "../lib/marketData";
 import { CandlestickSeries, ColorType, createChart, LineStyle } from "lightweight-charts";
 import { Play, Pause, SkipBack, SkipForward, RotateCcw, TrendingUp, TrendingDown, XCircle, Calculator } from "lucide-react";
 
@@ -57,10 +57,22 @@ export default function ReplayWorkspace() {
   const [rangeFrom, setRangeFrom] = useState("");
   const [rangeTo, setRangeTo] = useState("");
   const [appliedRange, setAppliedRange] = useState<{ from: string; to: string } | null>(null);
+  const [importedData, setImportedData] = useState<{ symbol: string; timeframe: string; fileName: string; candles: ReplayCandle[] } | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
     const sample = createSampleCandles(symbol, timeframe);
+    if (importedData && importedData.symbol === symbol && importedData.timeframe === timeframe) {
+      const selectedCandles = appliedRange ? importedData.candles.filter(candle => {
+        const stamp = Number(candle.time) * 1000;
+        return stamp >= new Date(appliedRange.from + "T00:00:00.000Z").getTime() && stamp <= new Date(appliedRange.to + "T23:59:59.999Z").getTime();
+      }) : importedData.candles;
+      const usableCandles = selectedCandles.length >= 2 ? selectedCandles : importedData.candles;
+      setData(usableCandles); setDataSource("IMPORTED CSV"); setDataLoading(false);
+      setDataMessage("Loaded " + usableCandles.length + " candles from " + importedData.fileName + ".");
+      setCursor(Math.min(25, usableCandles.length));
+      return () => controller.abort();
+    }
     setData(sample);
     setDataSource("SAMPLE DATA");
     setDataMessage("");
@@ -89,7 +101,7 @@ export default function ReplayWorkspace() {
         if (!controller.signal.aborted) setDataLoading(false);
       });
     return () => controller.abort();
-  }, [symbol, timeframe, appliedRange]);
+  }, [symbol, timeframe, appliedRange, importedData]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -208,6 +220,17 @@ export default function ReplayWorkspace() {
     setTradeMessage(`Trade closed at ${formatPrice(exit, symbol)}.`);
   };
 
+  const importCsv = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]; if (!file) return;
+    try {
+      const candles = parseImportedCandles(await file.text());
+      setPlaying(false); setPosition(null); setTrades([]); setAppliedRange(null);
+      setImportedData({ symbol, timeframe, fileName: file.name, candles });
+      setCursor(Math.min(25, candles.length));
+      setDataMessage("Validated " + candles.length + " candles. Loading imported data…");
+    } catch (error) { setDataMessage(error instanceof Error ? error.message : "Could not read this CSV file."); }
+    finally { event.target.value = ""; }
+  };
   const applyDateRange = () => {
     if (!rangeFrom || !rangeTo) {
       setDataMessage("Choose both a start date and an end date.");
@@ -267,6 +290,10 @@ export default function ReplayWorkspace() {
         <label>Timeframe<select value={timeframe} onChange={e => { setTimeframe(e.target.value); reset(); }}><option>1m</option><option>5m</option><option>15m</option><option>30m</option><option>1H</option><option>4H</option><option>1D</option><option>1W</option><option>1M</option><option>3M</option><option>6M</option><option>1Y</option></select></label>
         <label>Speed<select value={speed} onChange={e => setSpeed(e.target.value)}><option>1x</option><option>2x</option><option>4x</option></select></label>
       </div>
+      <div className="replay-date-range replay-import-range">
+        <label>Import historical CSV<input type="file" accept=".csv,text/csv" onChange={importCsv} /></label>
+        <span>CSV headers required: timestamp, open, high, low, close. Import applies to the selected market and timeframe.</span>
+      </div>
       {(symbol === "BTC/USDT" || symbol === "ETH/USDT" || symbol === "SOL/USDT") && <div className="replay-date-range">
         <label>From date<input type="date" value={rangeFrom} max={rangeTo || undefined} onChange={e => setRangeFrom(e.target.value)} /></label>
         <label>To date<input type="date" value={rangeTo} min={rangeFrom || undefined} onChange={e => setRangeTo(e.target.value)} /></label>
@@ -287,7 +314,7 @@ export default function ReplayWorkspace() {
       <div className="replay-controls">
         <button onClick={reset}><RotateCcw size={16}/> Reset</button>
         <div><button aria-label="Back one candle" onClick={() => { setPlaying(false); setCursor(c => Math.max(1, c - 1)); }}><SkipBack size={17}/></button><button className="replay-play" onClick={() => cursor >= data.length ? reset() : setPlaying(p => !p)}>{playing ? <Pause size={17}/> : <Play size={17}/>} {playing ? "Pause" : "Play"}</button><button aria-label="Forward one candle" onClick={() => { setPlaying(false); stepForward(); }}><SkipForward size={17}/></button></div>
-        <span className="replay-note">{dataSource === "BINANCE HISTORICAL" ? "Historical candles · Binance public spot" : "Sample candles · not historical market data"}</span>
+        <span className="replay-note">{dataSource === "BINANCE HISTORICAL" ? "Historical candles · Binance public spot" : dataSource === "IMPORTED CSV" ? "Historical candles · imported CSV file" : "Sample candles · not historical market data"}</span>
       </div>
     </div>
 
